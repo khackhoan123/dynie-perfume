@@ -34,7 +34,7 @@ function BottleModel() {
             attenuationDistance: 2.8,
             envMapIntensity: 1.8,
           });
-        } 
+        }
         // Nắp, cổ chai & chi tiết vàng: Kim loại champagne gold bóng loáng
         else if (name.includes('Cap') || name.includes('Neck') || name.includes('LabelBorder')) {
           mesh.material = new THREE.MeshStandardMaterial({
@@ -121,7 +121,7 @@ export default function HeroBottle3D() {
 
         {/* Hệ thống đèn Studio cao cấp */}
         <ambientLight intensity={0.7} />
-        
+
         {/* Key Light: Ánh sáng chính trắng ấm */}
         <directionalLight
           position={[4, 6, 4]}
@@ -161,12 +161,6 @@ export default function HeroBottle3D() {
           autoRotateSpeed={1.5}
         />
       </Canvas>
-
-      {/* Gợi ý tương tác vuốt/kéo 360 độ thanh lịch */}
-      <div className="absolute bottom-2 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 border border-white/10 text-[11px] text-stone-300 backdrop-blur-md pointer-events-none animate-in fade-in">
-        <Move3D className="w-3.5 h-3.5 text-amber-300" />
-        <span>Kéo chuột hoặc vuốt để xoay 360&deg;</span>
-      </div>
     </div>
   );
 }
