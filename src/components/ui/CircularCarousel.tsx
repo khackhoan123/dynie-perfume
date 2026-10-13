@@ -169,7 +169,7 @@ export default function CircularCarousel({
         setIsDragging(true);
         try {
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        } catch {}
+        } catch { }
       } else if (absY > 7) {
         // User intends vertical page scroll; release pointer lock
         isPointerDown.current = false;
@@ -192,7 +192,7 @@ export default function CircularCarousel({
         isHorizontalSwipe.current = false;
         try {
           (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-        } catch {}
+        } catch { }
       }
     }
   };
@@ -383,9 +383,6 @@ export default function CircularCarousel({
         <div className="px-3.5 py-1 rounded-full bg-black/50 border border-white/10 backdrop-blur-md flex items-center gap-2">
           <span className="text-[11px] sm:text-xs font-mono font-semibold tracking-widest text-[#F5E6BE]">
             {String(activeIndex + 1).padStart(2, '0')} / {String(count).padStart(2, '0')}
-          </span>
-          <span className="text-[9px] text-stone-400 font-sans hidden sm:inline uppercase tracking-wider">
-            • Vuốt 360&deg;
           </span>
         </div>
 
