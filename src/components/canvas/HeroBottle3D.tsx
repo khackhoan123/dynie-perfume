@@ -15,9 +15,6 @@ function BottleModel() {
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-
         const name = mesh.name;
 
         // Thân chai & Các tấm panel: Thủy tinh sang trọng (MeshPhysicalMaterial)
@@ -109,6 +106,7 @@ export default function HeroBottle3D() {
 
       <Canvas
         dpr={[1, 1.5]}
+        frameloop="always"
         gl={{
           antialias: true,
           alpha: true,

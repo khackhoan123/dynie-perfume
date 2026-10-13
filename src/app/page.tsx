@@ -1,7 +1,8 @@
 import { getPerfumeProducts } from '@/lib/sheets';
 import HomeClient from '@/components/home/HomeClient';
 
-export const revalidate = 60; // ISR cache revalidation every 60 seconds
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function HomePage() {
   const { products } = await getPerfumeProducts();

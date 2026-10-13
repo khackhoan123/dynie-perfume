@@ -48,11 +48,13 @@ export default function Scene3D({
     <div className="fixed inset-0 pointer-events-none -z-10 w-full h-full overflow-hidden select-none">
       <Canvas
         dpr={[1, 1.5]}
+        frameloop="always"
         gl={{
-          antialias: true,
+          antialias: false,
           alpha: true,
           powerPreference: 'high-performance',
           stencil: false,
+          depth: false,
         }}
       >
         <PerspectiveCamera makeDefault position={[0, 0, 5.5]} fov={45} />

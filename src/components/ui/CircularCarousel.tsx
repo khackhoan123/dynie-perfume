@@ -31,14 +31,12 @@ interface CircularCarouselProps {
 
 export default function CircularCarousel({
   items,
-  preset = 'cylinder',
-  cardWidth = 240,
+  cardWidth = 220,
   aspectRatio = 0.75, // 3:4 ratio
-  gap = 20,
   captions = true,
   draggable = true,
   autoplay = 'drift',
-  speed = 12,
+  speed = 10,
   onItemClick,
   themeGlow,
   themeBorder,
@@ -50,18 +48,21 @@ export default function CircularCarousel({
   const [responsiveCardWidth, setResponsiveCardWidth] = useState(cardWidth);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const isPointerDown = useRef(false);
+  const isHorizontalSwipe = useRef(false);
   const dragStartX = useRef(0);
+  const pointerStartY = useRef(0);
   const dragStartRotation = useRef(0);
   const dragDistance = useRef(0);
   const animFrameRef = useRef<number | null>(null);
 
-  // Responsive card width calculation (< 768px -> 190px)
+  // Responsive card width calculation (< 640px -> 165px, < 768px -> 190px, desktop -> 220px)
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 640) {
-        setResponsiveCardWidth(185);
+        setResponsiveCardWidth(165);
       } else if (window.innerWidth < 768) {
-        setResponsiveCardWidth(205);
+        setResponsiveCardWidth(190);
       } else {
         setResponsiveCardWidth(cardWidth);
       }
@@ -71,10 +72,16 @@ export default function CircularCarousel({
     return () => window.removeEventListener('resize', handleResize);
   }, [cardWidth]);
 
-  // Ensure minimum cards for a full cylinder ring (repeat items if count < 6)
+  // Ensure minimum cards for a full 3D cylinder ring (if count < 6, repeat items)
   const displayItems = useMemo(() => {
     if (items.length === 0) return [];
-    if (items.length >= 6) return items.map((item, idx) => ({ ...item, displayKey: `${item.id}-${idx}`, originalIndex: idx }));
+    if (items.length >= 6) {
+      return items.map((item, idx) => ({
+        ...item,
+        displayKey: `${item.id}-${idx}`,
+        originalIndex: idx,
+      }));
+    }
 
     // Duplicate until at least 6 items for circular cylinder
     const repeated: (CarouselItem & { displayKey: string; originalIndex: number })[] = [];
@@ -88,27 +95,41 @@ export default function CircularCarousel({
         });
       });
     }
-    return repeated.slice(0, 6); // exactly 6 slots for a harmonious hexagonal cylinder
+    return repeated.slice(0, 6);
   }, [items]);
 
   const count = displayItems.length;
   const angleStep = count > 0 ? 360 / count : 0;
 
-  // Cylinder radius calculation based on cardWidth and gap
+  // Dynamic gap based on card count
+  const effectiveGap = useMemo(() => {
+    if (count >= 8) return 14;
+    if (count >= 6) return 18;
+    return 22;
+  }, [count]);
+
+  // Cylinder radius calculation based on cardWidth and count (regular polygon circumradius)
   const radius = useMemo(() => {
     if (count === 0) return 300;
-    const sliceWidth = responsiveCardWidth + gap;
-    // R = sliceWidth / (2 * tan(PI / count))
-    const r = sliceWidth / (2 * Math.tan(Math.PI / count));
-    return Math.max(r, 260);
-  }, [count, responsiveCardWidth, gap]);
+    const sliceWidth = responsiveCardWidth + effectiveGap;
+    // R = sliceWidth / (2 * sin(PI / count))
+    const r = sliceWidth / (2 * Math.sin(Math.PI / count));
+    return Math.max(r, responsiveCardWidth * 1.3);
+  }, [count, responsiveCardWidth, effectiveGap]);
 
-  // Autoplay drift loop
+  // Active front item index (0-based) for display counter (e.g. "01 / 07")
+  const activeIndex = useMemo(() => {
+    if (count === 0 || angleStep === 0) return 0;
+    const norm = Math.round(-rotation / angleStep);
+    return ((norm % count) + count) % count;
+  }, [rotation, angleStep, count]);
+
+  // Autoplay drift loop: pauses when dragging, hovered, or single card
   useEffect(() => {
     if (!autoplay || isDragging || isHovered || count <= 1) return;
 
     let lastTime = performance.now();
-    const driftSpeed = speed * 0.08; // degrees per second
+    const driftSpeed = speed * 0.07; // smooth degrees per second
 
     const loop = (now: number) => {
       const delta = (now - lastTime) / 1000;
@@ -123,31 +144,57 @@ export default function CircularCarousel({
     };
   }, [autoplay, isDragging, isHovered, speed, count]);
 
-  // Drag Handlers
+  // Touch & Pointer Drag Handlers with Non-blocking Vertical Scroll for Mobile
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!draggable) return;
-    setIsDragging(true);
+    isPointerDown.current = true;
+    isHorizontalSwipe.current = false;
     dragStartX.current = e.clientX;
+    pointerStartY.current = e.clientY;
     dragStartRotation.current = rotation;
     dragDistance.current = 0;
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return;
+    if (!isPointerDown.current) return;
     const deltaX = e.clientX - dragStartX.current;
-    dragDistance.current = Math.abs(deltaX);
-    // Sensitivity factor
-    const degDelta = (deltaX / (responsiveCardWidth + gap)) * angleStep * 0.9;
-    setRotation(dragStartRotation.current + degDelta);
+    const deltaY = e.clientY - pointerStartY.current;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    // Gesture disambiguation: only intercept when horizontal movement dominates
+    if (!isHorizontalSwipe.current) {
+      if (absX > 7 && absX > absY) {
+        isHorizontalSwipe.current = true;
+        setIsDragging(true);
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {}
+      } else if (absY > 7) {
+        // User intends vertical page scroll; release pointer lock
+        isPointerDown.current = false;
+        return;
+      }
+    }
+
+    if (isHorizontalSwipe.current) {
+      dragDistance.current = absX;
+      const degDelta = (deltaX / (responsiveCardWidth + effectiveGap)) * angleStep * 0.95;
+      setRotation(dragStartRotation.current + degDelta);
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    try {
-      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
-    } catch {}
+    if (isPointerDown.current) {
+      isPointerDown.current = false;
+      if (isHorizontalSwipe.current) {
+        setIsDragging(false);
+        isHorizontalSwipe.current = false;
+        try {
+          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {}
+      }
+    }
   };
 
   const handlePrev = useCallback(() => {
@@ -160,47 +207,51 @@ export default function CircularCarousel({
 
   if (items.length === 0) {
     return (
-      <div className="h-[380px] flex items-center justify-center rounded-3xl bg-black/40 border border-white/10 text-stone-300 text-sm italic font-serif">
+      <div className="h-[280px] sm:h-[340px] flex items-center justify-center rounded-2xl bg-black/40 border border-white/10 text-stone-300 text-sm italic font-serif">
         Đang cập nhật các tuyệt phẩm cho bộ sưu tập này...
       </div>
     );
   }
 
-  // Card Height based on 3:4 ratio + captions
-  const cardHeight = responsiveCardWidth / aspectRatio;
+  // Card Height based on 3:4 ratio + captions block
+  const cardImageHeight = responsiveCardWidth / aspectRatio;
+  const cardCaptionHeight = captions ? 76 : 0;
+  const totalCardHeight = cardImageHeight + cardCaptionHeight;
 
   return (
-    <div 
-      className="relative w-full py-4 overflow-hidden select-none"
+    <div
+      className="relative w-full py-1 overflow-hidden select-none"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 3D Cylinder Stage */}
+      {/* 3D Cylinder Stage - strictly constrained heights (380px mobile / 450px desktop) */}
       <div
         ref={containerRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        className="relative w-full h-[520px] sm:h-[580px] flex items-center justify-center cursor-grab active:cursor-grabbing"
+        className="relative w-full h-[380px] sm:h-[430px] lg:h-[460px] flex items-center justify-center cursor-grab active:cursor-grabbing"
         style={{
-          perspective: 1300,
+          perspective: 1200,
           perspectiveOrigin: '50% 50%',
+          touchAction: 'pan-y', // enables native vertical page scroll on mobile
         }}
       >
         {/* Soft Spotlight ambient beam */}
-        <div 
-          className="absolute w-80 h-80 sm:w-96 sm:h-96 rounded-full blur-3xl opacity-20 pointer-events-none transition-all duration-700"
+        <div
+          className="absolute w-72 h-72 sm:w-96 sm:h-96 rounded-full blur-3xl opacity-20 pointer-events-none transition-all duration-700"
           style={{ backgroundColor: themeGlow || '#D4AF37' }}
         />
 
-        {/* Rotating Cylinder Assembly */}
+        {/* Rotating Cylinder Assembly with GPU acceleration */}
         <div
           className="relative w-full h-full flex items-center justify-center"
           style={{
             transformStyle: 'preserve-3d',
             transform: `rotateY(${rotation}deg)`,
             transition: isDragging ? 'none' : 'transform 0.3s ease-out',
+            willChange: 'transform',
           }}
         >
           {displayItems.map((item, idx) => {
@@ -214,62 +265,70 @@ export default function CircularCarousel({
             return (
               <div
                 key={item.displayKey}
-                onClick={(e) => {
-                  if (dragDistance.current > 8) return; // ignore click if dragging
+                onClick={() => {
+                  if (dragDistance.current > 8) return; // ignore click if dragged
                   onItemClick?.(item, item.originalIndex);
                 }}
-                className="absolute rounded-2xl overflow-hidden border border-white/15 bg-[#0D0913]/90 backdrop-blur-xl shadow-2xl transition-shadow duration-300 group flex flex-col justify-between"
+                className="absolute rounded-2xl overflow-hidden border border-white/15 bg-[#0A070F]/95 backdrop-blur-xl shadow-2xl transition-all duration-300 group flex flex-col justify-between"
                 style={{
                   width: `${responsiveCardWidth}px`,
-                  height: `${cardHeight + (captions ? 88 : 0)}px`,
+                  height: `${totalCardHeight}px`,
                   transform: `rotateY(${itemAngle}deg) translateZ(${radius}px)`,
                   transformStyle: 'preserve-3d',
                   backfaceVisibility: 'hidden',
-                  opacity: isFront ? Math.max(frontCloseness * 0.95 + 0.05, 0.35) : 0.15,
-                  boxShadow: isFront && frontCloseness > 0.8 && themeGlow ? `0 15px 40px -10px ${themeGlow}` : 'none',
-                  borderColor: isFront && frontCloseness > 0.8 && themeBorder ? themeBorder : 'rgba(255, 255, 255, 0.15)',
+                  willChange: 'transform',
+                  opacity: isFront ? Math.max(frontCloseness * 0.95 + 0.05, 0.4) : 0.15,
+                  boxShadow:
+                    isFront && frontCloseness > 0.8 && themeGlow
+                      ? `0 14px 36px -8px ${themeGlow}`
+                      : 'none',
+                  borderColor:
+                    isFront && frontCloseness > 0.8 && themeBorder
+                      ? themeBorder
+                      : 'rgba(255, 255, 255, 0.15)',
                 }}
               >
-                {/* Image Container (3:4 Ratio) */}
-                <div 
+                {/* Image Container with Luxury Gradient Overlay */}
+                <div
                   className="relative w-full overflow-hidden bg-black/60 shrink-0"
-                  style={{ height: `${cardHeight}px` }}
+                  style={{ height: `${cardImageHeight}px` }}
                 >
                   {item.src ? (
                     <Image
                       src={item.src}
                       alt={item.title}
                       fill
-                      sizes="260px"
+                      loading="lazy"
+                      sizes="(max-width: 640px) 165px, (max-width: 768px) 190px, 220px"
                       className="object-cover transition-transform duration-700 ease-out group-hover:scale-108"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                      <Droplet className="w-10 h-10" />
+                      <Droplet className="w-8 h-8" />
                     </div>
                   )}
 
-                  {/* Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
+                  {/* Gradient Overlay for Strong Text Contrast */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent pointer-events-none" />
 
-                  {/* Badge */}
+                  {/* Product Badge */}
                   {item.product.badge && (
-                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-white/20 text-white backdrop-blur-md border border-white/25 shadow-sm">
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-black/60 text-[#F5E6BE] border border-[#F5E6BE]/30 backdrop-blur-md shadow-sm">
                       {item.product.badge}
                     </div>
                   )}
 
-                  {/* Hover Overlay with 2 Luxury Actions */}
-                  <div className="absolute inset-0 bg-black/60 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2.5 p-4 z-20">
+                  {/* Hover Actions: Khám Phá & Thêm Nhanh */}
+                  <div className="absolute inset-0 bg-black/65 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2 p-3 z-20">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         onItemClick?.(item, item.originalIndex);
                       }}
-                      className="w-full py-2 px-3 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 text-white text-[11px] font-medium tracking-wider uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full py-1.5 px-2.5 rounded-lg bg-white/15 hover:bg-white/25 border border-white/25 text-white text-[10px] font-medium tracking-wider uppercase transition-all flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      <span>Khám Phá Mùi Hương</span>
-                      <ArrowUpRight className="w-3.5 h-3.5" />
+                      <span>Khám Phá Chi Tiết</span>
+                      <ArrowUpRight className="w-3 h-3" />
                     </button>
 
                     <button
@@ -277,29 +336,31 @@ export default function CircularCarousel({
                         e.stopPropagation();
                         addToCart(item.product, 'decant_10ml', 1);
                       }}
-                      className="w-full py-2 px-3 rounded-xl bg-[#FDFBF7] hover:bg-[#F3EFE6] text-[#1A1A1A] text-[11px] font-bold tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="w-full py-1.5 px-2.5 rounded-lg bg-[#FDFBF7] hover:bg-[#F3EFE6] text-[#1A1A1A] text-[10px] font-bold tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      <ShoppingBag className="w-3.5 h-3.5 text-[#1A1A1A]" />
-                      <span>Thêm Nhanh Vào Giỏ</span>
+                      <ShoppingBag className="w-3 h-3 text-[#1A1A1A]" />
+                      <span>Thêm Vào Giỏ</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Captions Block */}
+                {/* High Contrast Captions Block */}
                 {captions && (
-                  <div className="p-3 flex-1 flex flex-col justify-between bg-[#0C0812] border-t border-white/10">
+                  <div className="p-2.5 flex-1 flex flex-col justify-between bg-[#0A070F] border-t border-white/10">
                     <div className="space-y-0.5">
-                      <h4 className="text-sm font-serif font-bold text-white truncate group-hover:text-amber-200 transition-colors">
+                      <h4 className="text-xs sm:text-sm font-serif font-bold text-white truncate group-hover:text-[#F5E6BE] transition-colors drop-shadow-sm">
                         {item.title}
                       </h4>
-                      <p className="text-[11px] text-stone-300 truncate font-sans">
+                      <p className="text-[10px] sm:text-[11px] text-stone-200 truncate font-sans">
                         {item.subtitle}
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-white/5 text-[10px] text-amber-200/90 font-mono">
+                    <div className="flex items-center justify-between pt-1 border-t border-white/10 text-[10px] text-[#F5E6BE] font-mono">
                       <span>Chiết 10ml</span>
-                      <span className="font-bold text-white">{item.product.price_decant.toLocaleString('vi-VN')}đ</span>
+                      <span className="font-bold text-white">
+                        {item.product.price_decant.toLocaleString('vi-VN')}đ
+                      </span>
                     </div>
                   </div>
                 )}
@@ -309,26 +370,31 @@ export default function CircularCarousel({
         </div>
       </div>
 
-      {/* Navigation Arrows [ < ] and [ > ] */}
-      <div className="flex items-center justify-center gap-6 pt-3">
+      {/* Sleek Navigation Controls with "01 / 07" Champagne Gold Indicator */}
+      <div className="flex items-center justify-center gap-4 pt-1">
         <button
           onClick={handlePrev}
           aria-label="Chai trước"
-          className="w-10 h-10 rounded-full bg-black/60 hover:bg-black/85 border border-white/20 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-xl cursor-pointer"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 hover:bg-black/90 border border-white/15 text-[#F5E6BE] flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-md cursor-pointer"
         >
-          <ChevronLeft className="w-4 h-4 text-stone-200" />
+          <ChevronLeft className="w-4 h-4 text-[#F5E6BE]" />
         </button>
 
-        <span className="text-[11px] text-stone-400 font-mono tracking-widest uppercase">
-          Vuốt hoặc kéo xoay 360&deg;
-        </span>
+        <div className="px-3.5 py-1 rounded-full bg-black/50 border border-white/10 backdrop-blur-md flex items-center gap-2">
+          <span className="text-[11px] sm:text-xs font-mono font-semibold tracking-widest text-[#F5E6BE]">
+            {String(activeIndex + 1).padStart(2, '0')} / {String(count).padStart(2, '0')}
+          </span>
+          <span className="text-[9px] text-stone-400 font-sans hidden sm:inline uppercase tracking-wider">
+            • Vuốt 360&deg;
+          </span>
+        </div>
 
         <button
           onClick={handleNext}
           aria-label="Chai kế tiếp"
-          className="w-10 h-10 rounded-full bg-black/60 hover:bg-black/85 border border-white/20 text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-xl cursor-pointer"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-black/60 hover:bg-black/90 border border-white/15 text-[#F5E6BE] flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-md cursor-pointer"
         >
-          <ChevronRight className="w-4 h-4 text-stone-200" />
+          <ChevronRight className="w-4 h-4 text-[#F5E6BE]" />
         </button>
       </div>
     </div>

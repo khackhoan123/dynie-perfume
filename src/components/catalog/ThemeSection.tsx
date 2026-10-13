@@ -62,13 +62,13 @@ export default function ThemeSection({
     <section
       id={themeKey}
       ref={sectionRef}
-      className="scroll-mt-24 py-12 sm:py-16 border-t border-white/10 space-y-6"
+      className="scroll-mt-24 py-6 sm:py-8 border-t border-white/10 space-y-3 sm:space-y-4"
     >
       {/* Section Editorial Header bọc trong Glassmorphism Card sang trọng, không bị che lấp */}
-      <div className="max-w-4xl bg-black/45 backdrop-blur-xl border border-white/15 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-2.5">
-        <div className="flex items-center gap-3">
+      <div className="max-w-4xl bg-black/45 backdrop-blur-xl border border-white/15 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-1.5 sm:space-y-2">
+        <div className="flex items-center gap-2.5">
           <span 
-            className="text-xs font-mono font-bold tracking-widest px-3 py-0.5 rounded-full border"
+            className="text-[10px] sm:text-xs font-mono font-bold tracking-widest px-2.5 py-0.5 rounded-full border"
             style={{
               borderColor: theme.colors.border,
               color: theme.colors.primary,
@@ -77,17 +77,17 @@ export default function ThemeSection({
           >
             CHAPTER {indexRoman}
           </span>
-          <span className="w-12 h-px bg-white/20" />
-          <span className="text-xs uppercase tracking-widest text-stone-300 font-mono">
+          <span className="w-8 sm:w-12 h-px bg-white/20" />
+          <span className="text-[10px] sm:text-xs uppercase tracking-widest text-stone-300 font-mono">
             {theme.name}
           </span>
         </div>
 
-        <h3 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold tracking-tight text-white">
+        <h3 className="text-xl sm:text-2xl lg:text-3xl font-serif font-bold tracking-tight text-white">
           {theme.subtitle}
         </h3>
 
-        <p className="text-xs sm:text-sm text-stone-200 leading-relaxed max-w-3xl font-sans">
+        <p className="text-xs sm:text-sm text-stone-200 leading-relaxed max-w-3xl font-sans line-clamp-2">
           {theme.description}
         </p>
       </div>
@@ -95,14 +95,12 @@ export default function ThemeSection({
       {/* Sân khấu 3D Circular Carousel (ReactBits Preset Cylinder) */}
       <CircularCarousel
         items={carouselItems}
-        preset="cylinder"
-        cardWidth={240}
+        cardWidth={220}
         aspectRatio={0.75}
-        gap={20}
         captions={true}
         draggable={true}
         autoplay="drift"
-        speed={12}
+        speed={10}
         themeGlow={theme.colors.glow}
         themeBorder={theme.colors.border}
         onItemClick={(item) => setSelectedProduct(item.product)}

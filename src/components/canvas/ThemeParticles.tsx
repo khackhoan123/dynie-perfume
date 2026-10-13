@@ -11,7 +11,7 @@ interface ThemeParticlesProps {
   transitionProgress: number;
 }
 
-const PARTICLE_COUNT = 160;
+const PARTICLE_COUNT = 45;
 
 /**
  * Tạo texture hình tròn phát quang mềm (radial glow disc) để hạt không bị vuông

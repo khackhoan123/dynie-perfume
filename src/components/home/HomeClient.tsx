@@ -32,7 +32,9 @@ const CHAPTERS: ScentChapter[] = [
 export default function HomeClient({ products }: HomeClientProps) {
   // Nhóm sản phẩm theo 5 theme
   const getProductsByTheme = (themeKey: ThemeKey) => {
-    return products.filter((p) => p.theme_id === themeKey);
+    return products.filter(
+      (p) => (p.theme_id || '').toString().trim().toLowerCase() === themeKey.trim().toLowerCase()
+    );
   };
 
   return (
